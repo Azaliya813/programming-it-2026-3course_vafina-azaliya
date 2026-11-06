@@ -27,43 +27,24 @@ themeToggle.addEventListener('click', () => {
 });
 
 async function loadTasks() {
-
     taskList.innerHTML = '<li style="text-align:center; padding: 20px; color: var(--text-muted);">Загрузка задач...</li>';
-
     try {
         const response = await fetch(API_URL);
-
-        if (!response.ok) {
-            throw new Error(`Ошибка HTTP: ${response.status}`);
-        }
-
+        if (!response.ok) throw new Error(`Ошибка HTTP: ${response.status}`);
         const allTasks = await response.json();
-
         tasks = allTasks.filter(task => task.studentId === STUDENT_ID);
-        
         renderTasks();
-
     } catch (error) {
         console.error(error);
-
-        taskList.innerHTML = `
-            <li style="text-align:center; padding: 20px; color: #ff5252;">
-                ⚠️ Ошибка загрузки данных.<br>
-                <button onclick="loadTasks()" style="margin-top:10px; padding: 8px 16px; border:none; border-radius:5px; background:var(--btn-bg); color:white; cursor:pointer;">Повторить</button>
-            </li>
-        `;
+        taskList.innerHTML = `<li style="text-align:center; padding: 20px; color: #ff5252;">⚠️ Ошибка загрузки данных.</li>`;
     }
 }
 
 function renderTasks() {
     taskList.innerHTML = '';
-
     let filteredTasks = tasks;
-    if (currentFilter === 'active') {
-        filteredTasks = tasks.filter(task => !task.completed);
-    } else if (currentFilter === 'completed') {
-        filteredTasks = tasks.filter(task => task.completed);
-    }
+    if (currentFilter === 'active') filteredTasks = tasks.filter(task => !task.completed);
+    else if (currentFilter === 'completed') filteredTasks = tasks.filter(task => task.completed);
 
     if (filteredTasks.length === 0) {
         taskList.innerHTML = `<li style="text-align:center; padding: 20px; color: var(--text-muted); font-style: italic;">Задач пока нет...</li>`;
@@ -74,7 +55,6 @@ function renderTasks() {
         const li = document.createElement('li');
         li.className = `task-item ${task.completed ? 'completed' : ''}`;
         li.dataset.id = task.id;
-
         li.innerHTML = `
             <div class="task-content">
                 <input type="checkbox" class="task-checkbox" ${task.completed ? 'checked' : ''}>
@@ -82,7 +62,6 @@ function renderTasks() {
             </div>
             <button class="btn-delete" title="Удалить задачу">✕</button>
         `;
-
         taskList.appendChild(li);
     });
 }
@@ -90,72 +69,48 @@ function renderTasks() {
 form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const text = input.value.trim();
-    
-    if (text === '') {
-        input.style.border = '2px solid #ff5252';
-        setTimeout(() => input.style.border = 'none', 1000);
-        return;
-    }
-
-    const submitBtn = form.querySelector('.btn-add');
-    const originalText = submitBtn.innerHTML;
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Отправка...';
-
+    if (text === '') return;
     try {
         const response = await fetch(API_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-                title: text, 
-                completed: false,
-                studentId: STUDENT_ID 
-            })
+            body: JSON.stringify({ title: text, completed: false, studentId: STUDENT_ID })
         });
-
-        if (!response.ok) throw new Error("Не удалось создать задачу");
-
+        if (!response.ok) throw new Error("Не удалось создать");
         input.value = '';
         await loadTasks();
-
-    } catch (error) {
-        alert("Ошибка при создании задачи: " + error.message);
-    } finally {
-
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = originalText;
-        input.focus();
-    }
+    } catch (error) { alert(error.message); }
 });
 
 taskList.addEventListener('click', async (e) => {
     const li = e.target.closest('.task-item');
     if (!li) return;
-
     const taskId = li.dataset.id;
 
     if (e.target.classList.contains('btn-delete')) {
         try {
-            const response = await fetch(`${API_URL}/${taskId}`, { method: "DELETE" });
-            if (!response.ok) throw new Error("Не удалось удалить");
-            await loadTasks(); // Перезагружаем список
-        } catch (error) {
-            alert("Ошибка при удалении: " + error.message);
-        }
+            await fetch(`${API_URL}/${taskId}`, { method: "DELETE" });
+            await loadTasks(); 
+        } catch (error) { alert("Ошибка удаления"); }
     }
 
     if (e.target.classList.contains('task-checkbox')) {
-
-        const task = tasks.find(t => t.id === taskId);
+        const task = tasks.find(t => t.id == taskId);
         if (task) {
             task.completed = e.target.checked;
-
-            await fetch(`${API_URL}/${taskId}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ completed: task.completed })
-            });
-            renderTasks(); 
+            try {
+                const response = await fetch(`${API_URL}/${taskId}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ completed: task.completed })
+                });
+                if (!response.ok) throw new Error("Ошибка сервера");
+                renderTasks(); 
+            } catch (error) {
+                console.error(error);
+                task.completed = !task.completed; 
+                renderTasks();
+            }
         }
     }
 });
